@@ -1,11 +1,14 @@
-import { useCallback, useMemo } from 'react';
-import { groupChapters } from '../data/groupChapters';
+import { useCallback } from 'react';
+import { countGoals, type MenuSection, type SubjectMenu } from '../data/menu';
 import type { Route } from '../hooks/useHashRoute';
-import { LEVEL_LABELS, type Chapter, type LevelNumber, type Subject } from '../types';
+import { LEVEL_LABELS, type LevelNumber, type Subject } from '../types';
+import { CurriculumMenu } from './CurriculumMenu';
 import { DownloadButton } from './DownloadButton';
 
 interface Props {
   fag: Subject;
+  menu: SubjectMenu;
+  section?: MenuSection;
   navigate: (r: Route) => void;
 }
 
@@ -15,73 +18,56 @@ const LEVEL_TEXT: Record<LevelNumber, string> = {
   3: 'Deltakeren gjør oppgaven på egen hånd og overfører den til nye situasjoner.',
 };
 
-export function SubjectOverview({ fag, navigate }: Props) {
-  const antall = fag.kapitler.reduce((n, k) => n + k.maal.length, 0);
+export function SubjectOverview({ fag, menu, section, navigate }: Props) {
+  const antall = section ? countGoals(section) : fag.kapitler.reduce((n, k) => n + k.maal.length, 0);
   const onDownload = useCallback(async () => (await import('../services/docxExport')).exportSubject(fag), [fag]);
-  const sections = useMemo(() => toSections(fag.kapitler), [fag]);
+  const shown: SubjectMenu = section ? { sections: [section], viserSpraanivaa: menu.viserSpraanivaa } : menu;
 
   return (
     <div>
       <header className="page-header with-action">
         <div>
           <p className="eyebrow">Digitale ferdigheter</p>
-          <h1>{fag.navn}</h1>
+          <h1>{section ? section.label : fag.navn}</h1>
           <p className="lead">
-            {antall} mål i {fag.kapitler.length} kapitler. Velg et kapittel for å se målformuleringene.
+            {section
+              ? `${antall} mål. Velg et ledd for å se målformuleringene.`
+              : `${antall} mål. Velg en bolk, og deretter et ledd, for å se målformuleringene.`}
           </p>
         </div>
-        <DownloadButton label={`Last ned ${fag.navn.toLowerCase()} (Word)`} onDownload={onDownload} variant="secondary" />
+        {!section && (
+          <DownloadButton label={`Last ned ${fag.navn.toLowerCase()} (Word)`} onDownload={onDownload} variant="secondary" />
+        )}
       </header>
 
-      <section aria-labelledby="nivaaer" className="legend">
-        <h2 id="nivaaer" className="visually-hidden">
-          De tre nivåene
-        </h2>
-        {([1, 2, 3] as const).map((n) => (
-          <div key={n} className={`legend-item level-${n}`}>
-            <span className="level-badge">{n}</span>
-            <div>
-              <strong>{LEVEL_LABELS[n]}</strong>
-              <p>{LEVEL_TEXT[n]}</p>
-            </div>
-          </div>
-        ))}
-      </section>
+      {menu.viserSpraanivaa && (
+        <p className="color-key">Fargen i menyen er språknivå. Fargen på kortene er hvor selvstendig deltakeren jobber.</p>
+      )}
 
-      {sections.map((s) => (
-        <section key={s.key} className="chapter-section">
-          {s.tittel && <h2 className="chapter-section-title">{s.tittel}</h2>}
-          <ul className="chapter-grid">
-            {s.kapitler.map((kap) => (
-              <li key={kap.id}>
-                <button type="button" className="chapter-card" onClick={() => navigate({ fag: fag.id, kapittel: kap.id })}>
-                  {!s.tittel && kap.hoved && <span className="chapter-num">{kap.hoved}</span>}
-                  <span className="chapter-card-title">{kap.under}</span>
-                  <span className="chapter-card-count">{kap.maal.length} mål</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+      {!section && (
+        <section aria-labelledby="nivaaer" className="legend">
+          <h2 id="nivaaer" className="visually-hidden">
+            De tre nivåene
+          </h2>
+          {([1, 2, 3] as const).map((n) => (
+            <div key={n} className={`legend-item level-${n}`}>
+              <span className="level-badge">{n}</span>
+              <div>
+                <strong>{LEVEL_LABELS[n]}</strong>
+                <p>{LEVEL_TEXT[n]}</p>
+              </div>
+            </div>
+          ))}
         </section>
-      ))}
+      )}
+
+      <CurriculumMenu
+        menu={shown}
+        variant="overview"
+        activeSectionId={section?.id}
+        onToggleSection={() => undefined}
+        onSelectChapter={(chapterId) => navigate({ fag: fag.id, kapittel: chapterId })}
+      />
     </div>
   );
-}
-
-interface Section {
-  key: string;
-  tittel?: string;
-  kapitler: Chapter[];
-}
-
-/** Enkeltstående kapitler samles i ett rutenett; kapitler med underavsnitt får egen overskrift. */
-function toSections(kapitler: Chapter[]): Section[] {
-  const sections: Section[] = [];
-  for (const g of groupChapters(kapitler)) {
-    const last = sections[sections.length - 1];
-    if (g.kapitler.length === 1 && last && !last.tittel) last.kapitler.push(g.kapitler[0]!);
-    else if (g.kapitler.length === 1) sections.push({ key: g.kapitler[0]!.id, kapitler: [...g.kapitler] });
-    else sections.push({ key: g.hoved, tittel: g.hoved, kapitler: g.kapitler });
-  }
-  return sections;
 }

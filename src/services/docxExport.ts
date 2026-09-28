@@ -14,6 +14,7 @@ import {
   WidthType,
   type FileChild,
 } from 'docx';
+import { ACTIVITY_HEADING, parseActivity } from '../data/activity';
 import { LEVEL_LABELS, type Goal, type Level, type Subject } from '../types';
 
 // Samme nivåfarger som i appen (se styles.css).
@@ -23,6 +24,18 @@ const CELL_BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER 
 
 const text = (value: string, opts: { bold?: boolean; italics?: boolean; size?: number; color?: string } = {}) =>
   new Paragraph({ spacing: { after: 80 }, children: [new TextRun({ text: value, ...opts })] });
+
+function activityLines(raw: string): Paragraph[] {
+  const parts = parseActivity(raw);
+  const heading = text(ACTIVITY_HEADING, { bold: true, size: 18, color: '5B6470' });
+  if (!parts) return [heading, text(raw || 'Forslag er ikke lagt inn ennå.', { size: 20, italics: !raw })];
+  return [
+    heading,
+    text(`Forbered: ${parts.forbered}`, { size: 20 }),
+    text(`Gjør: ${parts.gjor}`, { size: 20 }),
+    text(`Se etter: ${parts.seEtter}`, { size: 20 }),
+  ];
+}
 
 function levelCell(level: Level): TableCell {
   return new TableCell({
@@ -38,8 +51,7 @@ function levelCell(level: Level): TableCell {
       text('Målet på dette nivået', { bold: true, size: 18, color: '5B6470' }),
       text(level.beskrivelse, { size: 20 }),
       new Paragraph({ spacing: { before: 160 }, children: [] }),
-      text('Slik kan du jobbe i klasserommet', { bold: true, size: 18, color: '5B6470' }),
-      text(level.eksempel || 'Eksempel er ikke lagt inn ennå.', { size: 20, italics: !level.eksempel }),
+      ...activityLines(level.eksempel),
     ],
   });
 }
