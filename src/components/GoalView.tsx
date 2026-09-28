@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import type { Placement } from '../data/menu';
 import type { Route } from '../hooks/useHashRoute';
 import type { Chapter, Goal, Subject } from '../types';
 import { Breadcrumb } from './Breadcrumb';
@@ -9,31 +10,45 @@ interface Props {
   fag: Subject;
   kapittel: Chapter;
   goal: Goal;
+  placement?: Placement;
   navigate: (r: Route) => void;
 }
 
-export function GoalView({ fag, kapittel, goal, navigate }: Props) {
+export function GoalView({ fag, kapittel, goal, placement, navigate }: Props) {
   const index = kapittel.maal.findIndex((g) => g.id === goal.id);
   const prev = kapittel.maal[index - 1];
   const next = kapittel.maal[index + 1];
   const go = (g: Goal) => navigate({ fag: fag.id, kapittel: kapittel.id, maal: g.nr });
   const onDownload = useCallback(async () => (await import('../services/docxExport')).exportGoal(goal, fag), [goal, fag]);
+  const section = placement?.section;
+  const item = placement?.item;
 
   return (
     <div className="goal-view">
       <Breadcrumb
         items={[
           { label: fag.navn, onClick: () => navigate({ fag: fag.id }) },
-          { label: kapittel.tittel, onClick: () => navigate({ fag: fag.id, kapittel: kapittel.id }) },
+          ...(section
+            ? [{ label: section.label, onClick: () => navigate({ fag: fag.id, kapittel: section.id }) }]
+            : []),
+          { label: item?.label ?? kapittel.tittel, onClick: () => navigate({ fag: fag.id, kapittel: kapittel.id }) },
           { label: `Mål ${goal.nr}` },
         ]}
       />
 
       <header className="goal-header">
         <div>
+          {section && (
+            <p className={`cefr-badge tone-${section.tone}`}>
+              <span className="tone-swatch" aria-hidden="true" />
+              {section.label}
+              {item ? ` · ${item.label}` : ''}
+            </p>
+          )}
           <p className="eyebrow">
-            Mål {goal.nr} · {kapittel.tittel}
-            {goal.side && ` · ${goal.side}`}
+            Mål {goal.nr}
+            {item?.henvisning ? ` · ${item.henvisning}` : ''}
+            {goal.side ? ` · ${goal.side}` : ''}
           </p>
           <h1>{goal.maal}</h1>
         </div>

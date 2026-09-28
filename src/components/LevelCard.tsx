@@ -1,6 +1,9 @@
+import { ACTIVITY_HEADING, parseActivity } from '../data/activity';
 import { LEVEL_LABELS, type Level } from '../types';
 
 export function LevelCard({ level }: { level: Level }) {
+  const parts = parseActivity(level.eksempel);
+
   return (
     <article className={`level-card level-${level.nummer}`} aria-labelledby={`nivaa-${level.nummer}`}>
       <header className="level-head">
@@ -19,8 +22,27 @@ export function LevelCard({ level }: { level: Level }) {
       </section>
 
       <section className="level-section example">
-        <h4>Slik kan du jobbe i klasserommet</h4>
-        {level.eksempel ? <p>{level.eksempel}</p> : <p className="muted">Eksempel er ikke lagt inn ennå.</p>}
+        <h4>{ACTIVITY_HEADING}</h4>
+        {parts ? (
+          <dl className="activity">
+            <div>
+              <dt>Forbered</dt>
+              <dd>{parts.forbered}</dd>
+            </div>
+            <div>
+              <dt>Gjør</dt>
+              <dd>{parts.gjor}</dd>
+            </div>
+            <div>
+              <dt>Se etter</dt>
+              <dd>{parts.seEtter}</dd>
+            </div>
+          </dl>
+        ) : level.eksempel ? (
+          <p>{level.eksempel}</p>
+        ) : (
+          <p className="muted">Forslag er ikke lagt inn ennå.</p>
+        )}
       </section>
     </article>
   );

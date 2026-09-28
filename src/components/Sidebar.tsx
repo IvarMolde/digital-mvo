@@ -1,76 +1,44 @@
-import { useEffect, useMemo, useState } from 'react';
-import { groupChapters, type ChapterGroup } from '../data/groupChapters';
+import { useEffect, useState } from 'react';
+import { searchGoals, type SubjectMenu } from '../data/menu';
 import type { Route } from '../hooks/useHashRoute';
-import type { Chapter, Subject } from '../types';
+import type { Subject } from '../types';
+import { CurriculumMenu } from './CurriculumMenu';
 
 interface Props {
   fag: Subject[];
   aktivtFag: Subject;
+  menu: SubjectMenu;
   aktivtKapittel?: string;
+  aktivBolk?: string;
   navigate: (r: Route) => void;
 }
 
-export function Sidebar({ fag, aktivtFag, aktivtKapittel, navigate }: Props) {
-  const groups = useMemo(() => groupChapters(aktivtFag.kapitler), [aktivtFag]);
-  const [open, setOpen] = useState<Set<string>>(new Set());
+export function Sidebar({ fag, aktivtFag, menu, aktivtKapittel, aktivBolk, navigate }: Props) {
+  const [query, setQuery] = useState('');
+  // undefined følger ruten, null er lukket, ellers er den bolken åpnet av læreren.
+  const [override, setOverride] = useState<string | null | undefined>(undefined);
 
-  // Gruppen med valgt kapittel åpnes automatisk; andre forblir lukket for å holde menyen kort.
   useEffect(() => {
-    const active = groups.find((g) => g.kapitler.some((k) => k.id === aktivtKapittel));
-    if (active) setOpen((prev) => (prev.has(active.hoved) ? prev : new Set(prev).add(active.hoved)));
-  }, [groups, aktivtKapittel]);
+    setOverride(undefined);
+    setQuery('');
+  }, [aktivtFag.id, aktivtKapittel, aktivBolk]);
 
-  const toggle = (hoved: string) =>
-    setOpen((prev) => {
-      const next = new Set(prev);
-      if (next.has(hoved)) next.delete(hoved);
-      else next.add(hoved);
-      return next;
-    });
+  const openSectionId = override === undefined ? aktivBolk : override;
+  const hits = searchGoals(menu, query);
 
-  const link = (kap: Chapter, nested: boolean) => (
-    <button
-      type="button"
-      className={`chapter-link ${kap.id === aktivtKapittel ? 'active' : ''} ${nested ? 'nested' : ''}`}
-      aria-current={kap.id === aktivtKapittel ? 'page' : undefined}
-      onClick={() => navigate({ fag: aktivtFag.id, kapittel: kap.id })}
-    >
-      <span className="chapter-name">
-        {!nested && kap.hoved && <span className="chapter-num">{kap.hoved}</span>}
-        {kap.under}
-      </span>
-      <span className="count" aria-label={`${kap.maal.length} mål`}>
-        {kap.maal.length}
-      </span>
-    </button>
-  );
-
-  const renderGroup = (g: ChapterGroup) => {
-    if (g.kapitler.length === 1) return link(g.kapitler[0]!, false);
-    const isOpen = open.has(g.hoved);
-    const panelId = `gruppe-${g.kapitler[0]!.id}`;
-    return (
-      <>
-        <button type="button" className="chapter-group" aria-expanded={isOpen} aria-controls={panelId} onClick={() => toggle(g.hoved)}>
-          <span className="chevron" aria-hidden="true">
-            ›
-          </span>
-          <span className="chapter-group-name">{g.hoved}</span>
-          <span className="count">{g.antallMaal}</span>
-        </button>
-        {isOpen && (
-          <ul id={panelId}>
-            {g.kapitler.map((kap) => (
-              <li key={kap.id}>{link(kap, true)}</li>
-            ))}
-          </ul>
-        )}
-      </>
-    );
+  const toggle = (sectionId: string) => {
+    const isOpen = openSectionId === sectionId;
+    const onSectionPage = aktivBolk === sectionId && !aktivtKapittel;
+    if (isOpen && onSectionPage) {
+      setOverride(null);
+      return;
+    }
+    setOverride(sectionId);
+    navigate({ fag: aktivtFag.id, kapittel: sectionId });
   };
 
   return (
-    <nav className="sidebar" aria-label="Fag og kapitler">
+    <nav className="sidebar" id="meny" aria-label="Fag og kapitler">
       <div className="subject-tabs" role="tablist" aria-label="Velg dokument">
         {fag.map((f) => (
           <button
@@ -88,17 +56,62 @@ export function Sidebar({ fag, aktivtFag, aktivtKapittel, navigate }: Props) {
 
       <button
         type="button"
-        className={`chapter-link overview-link ${!aktivtKapittel ? 'active' : ''}`}
+        className={`chapter-link overview-link ${!aktivtKapittel && !aktivBolk ? 'active' : ''}`}
         onClick={() => navigate({ fag: aktivtFag.id })}
       >
         Oversikt over {aktivtFag.navn.toLowerCase()}
       </button>
 
-      <ul className="chapter-list">
-        {groups.map((g) => (
-          <li key={g.hoved + g.kapitler[0]!.id}>{renderGroup(g)}</li>
-        ))}
-      </ul>
+      <label className="menu-search-label" htmlFor="sok">
+        Søk i {aktivtFag.navn.toLowerCase()}
+      </label>
+      <input
+        id="sok"
+        type="search"
+        className="menu-search"
+        value={query}
+        placeholder="Søk i mål, kapittel eller side"
+        onChange={(event) => setQuery(event.target.value)}
+      />
+
+      {query.trim() ? (
+        <div className="search-results" aria-live="polite">
+          {hits.length === 0 ? (
+            <p className="search-empty">Ingen mål passer søket.</p>
+          ) : (
+            <ul>
+              {hits.map((hit) => (
+                <li key={hit.goal.id}>
+                  <button
+                    type="button"
+                    className={`search-hit tone-${hit.section.tone}`}
+                    onClick={() => navigate({ fag: aktivtFag.id, kapittel: hit.item.id, maal: hit.goal.nr })}
+                  >
+                    <span className="tone-swatch" aria-hidden="true" />
+                    <span>
+                      <span className="search-hit-where">
+                        Mål {hit.goal.nr} · {hit.section.label} · {hit.item.label}
+                        {hit.goal.side ? ` · ${hit.goal.side}` : ''}
+                      </span>
+                      <span className="search-hit-text">{hit.goal.maal}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : (
+        <CurriculumMenu
+          menu={menu}
+          variant="sidebar"
+          activeChapterId={aktivtKapittel}
+          activeSectionId={aktivBolk}
+          openSectionId={openSectionId}
+          onToggleSection={toggle}
+          onSelectChapter={(chapterId) => navigate({ fag: aktivtFag.id, kapittel: chapterId })}
+        />
+      )}
     </nav>
   );
 }
