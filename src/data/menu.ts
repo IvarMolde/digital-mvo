@@ -22,6 +22,8 @@ export interface SubjectMenu {
   sections: MenuSection[];
   /** Norsk bruker språknivå som navigasjon, og skal forklare de to fargesystemene. */
   viserSpraanivaa: boolean;
+  /** Samfunnsfag: temaet er menyvalget. Kapittelnummeret er bare en henvisning. */
+  direkteTema: boolean;
 }
 
 export interface Placement {
@@ -49,10 +51,11 @@ interface Draft {
   item: MenuItem;
 }
 
-function subjectKind(subject: Subject): 'norsk' | 'overordnet' | 'other' {
+function subjectKind(subject: Subject): 'norsk' | 'overordnet' | 'samfunn' | 'other' {
   const name = subject.navn.toLowerCase();
   if (name.startsWith('norsk')) return 'norsk';
   if (name.startsWith('overordnet')) return 'overordnet';
+  if (name.startsWith('samfunn')) return 'samfunn';
   return 'other';
 }
 
@@ -136,7 +139,21 @@ function slug(value: string): string {
     .replace(/^-|-$/g, '');
 }
 
-/** Samfunnsfag og andre dokumenter: kapitlet er bolken, temaet er leddet. */
+/** Samfunnsfag: hvert tema er et eget menyvalg. Kapittelnummeret følger med som henvisning. */
+function classifySamfunn(chapter: Chapter, index: number): Draft {
+  const tema = chapter.under || chapter.tittel;
+  return {
+    sectionId: chapter.id,
+    sectionLabel: tema,
+    tone: 'neutral',
+    sectionOrder: index,
+    itemOrder: 0,
+    seq: index,
+    item: itemFor(chapter, tema, chapter.hoved || undefined),
+  };
+}
+
+/** Andre dokumenter: kapitlet er bolken, temaet er leddet. */
 function classifyByChapter(chapter: Chapter, index: number): Draft {
   const hoved = chapter.hoved || chapter.tittel;
   const number = hoved.match(/(\d+)/);
@@ -153,7 +170,8 @@ function classifyByChapter(chapter: Chapter, index: number): Draft {
 
 export function buildMenu(subject: Subject): SubjectMenu {
   const kind = subjectKind(subject);
-  const classify = kind === 'norsk' ? classifyNorsk : kind === 'overordnet' ? classifyOverordnet : classifyByChapter;
+  const classify =
+    kind === 'norsk' ? classifyNorsk : kind === 'overordnet' ? classifyOverordnet : kind === 'samfunn' ? classifySamfunn : classifyByChapter;
   const buckets = new Map<string, { draft: Draft; rows: Draft[] }>();
 
   subject.kapitler.forEach((chapter, index) => {
@@ -174,7 +192,7 @@ export function buildMenu(subject: Subject): SubjectMenu {
         .map((row) => row.item),
     }));
 
-  return { sections, viserSpraanivaa: kind === 'norsk' };
+  return { sections, viserSpraanivaa: kind === 'norsk', direkteTema: kind === 'samfunn' };
 }
 
 export function findPlacement(menu: SubjectMenu, chapterId: string): Placement | undefined {

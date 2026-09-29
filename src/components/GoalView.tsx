@@ -22,13 +22,14 @@ export function GoalView({ fag, kapittel, goal, placement, navigate }: Props) {
   const onDownload = useCallback(async () => (await import('../services/docxExport')).exportGoal(goal, fag), [goal, fag]);
   const section = placement?.section;
   const item = placement?.item;
+  const showSection = section && section.label !== (item?.label ?? kapittel.tittel);
 
   return (
     <div className="goal-view">
       <Breadcrumb
         items={[
           { label: fag.navn, onClick: () => navigate({ fag: fag.id }) },
-          ...(section
+          ...(showSection
             ? [{ label: section.label, onClick: () => navigate({ fag: fag.id, kapittel: section.id }) }]
             : []),
           { label: item?.label ?? kapittel.tittel, onClick: () => navigate({ fag: fag.id, kapittel: kapittel.id }) },
@@ -38,7 +39,7 @@ export function GoalView({ fag, kapittel, goal, placement, navigate }: Props) {
 
       <header className="goal-header">
         <div>
-          {section && (
+          {showSection && (
             <p className={`cefr-badge tone-${section.tone}`}>
               <span className="tone-swatch" aria-hidden="true" />
               {section.label}
