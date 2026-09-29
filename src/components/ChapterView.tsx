@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { Placement } from '../data/menu';
 import type { Route } from '../hooks/useHashRoute';
-import type { Chapter, Subject } from '../types';
+import type { Chapter, Goal, Subject } from '../types';
 import { Breadcrumb } from './Breadcrumb';
+import { DownloadButton } from './DownloadButton';
 import { LevelCard } from './LevelCard';
 
 interface Props {
@@ -38,7 +39,7 @@ export function ChapterView({ fag, kapittel, placement, navigate }: Props) {
         <h1>{item?.label ?? kapittel.tittel}</h1>
         <p className="lead">
           {item?.henvisning ? `${item.henvisning}. ` : ''}
-          Åpne et mål for å se forslaget til aktivitet. Egen side kan deles og lastes ned som Word.
+          Åpne et mål for å se nivåene og laste ned Word. Egen side kan deles.
         </p>
       </header>
 
@@ -63,25 +64,37 @@ export function ChapterView({ fag, kapittel, placement, navigate }: Props) {
                 </span>
               </button>
               {open && (
-                <div id={panelId} className="goal-inline">
-                  <div className="level-grid">
-                    {goal.nivaer.map((level) => (
-                      <LevelCard key={level.nummer} level={level} />
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => navigate({ fag: fag.id, kapittel: kapittel.id, maal: goal.nr })}
-                  >
-                    Åpne egen side
-                  </button>
-                </div>
+                <OpenGoal
+                  id={panelId}
+                  fag={fag}
+                  goal={goal}
+                  onOpenPage={() => navigate({ fag: fag.id, kapittel: kapittel.id, maal: goal.nr })}
+                />
               )}
             </li>
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+function OpenGoal({ id, fag, goal, onOpenPage }: { id: string; fag: Subject; goal: Goal; onOpenPage: () => void }) {
+  const onDownload = useCallback(async () => (await import('../services/docxExport')).exportGoal(goal, fag), [goal, fag]);
+
+  return (
+    <div id={id} className="goal-inline">
+      <div className="goal-inline-bar">
+        <DownloadButton label="Last ned som Word" onDownload={onDownload} />
+        <button type="button" className="btn btn-ghost" onClick={onOpenPage}>
+          Åpne egen side
+        </button>
+      </div>
+      <div className="level-grid">
+        {goal.nivaer.map((level) => (
+          <LevelCard key={level.nummer} level={level} />
+        ))}
+      </div>
     </div>
   );
 }
