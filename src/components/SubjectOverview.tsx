@@ -21,7 +21,9 @@ const LEVEL_TEXT: Record<LevelNumber, string> = {
 export function SubjectOverview({ fag, menu, section, navigate }: Props) {
   const antall = section ? countGoals(section) : fag.kapitler.reduce((n, k) => n + k.maal.length, 0);
   const onDownload = useCallback(async () => (await import('../services/docxExport')).exportSubject(fag), [fag]);
-  const shown: SubjectMenu = section ? { sections: [section], viserSpraanivaa: menu.viserSpraanivaa } : menu;
+  const shown: SubjectMenu = section
+    ? { sections: [section], viserSpraanivaa: menu.viserSpraanivaa, direkteTema: false }
+    : menu;
 
   return (
     <div>
@@ -32,7 +34,9 @@ export function SubjectOverview({ fag, menu, section, navigate }: Props) {
           <p className="lead">
             {section
               ? `${antall} mål. Velg et ledd for å se målformuleringene.`
-              : `${antall} mål. Velg en bolk, og deretter et ledd, for å se målformuleringene.`}
+              : menu.direkteTema
+                ? `${antall} mål. Velg et tema for å se målformuleringene.`
+                : `${antall} mål. Velg en bolk, og deretter et ledd, for å se målformuleringene.`}
           </p>
         </div>
         {!section && (

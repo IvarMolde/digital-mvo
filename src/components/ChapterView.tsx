@@ -17,20 +17,21 @@ export function ChapterView({ fag, kapittel, placement, navigate }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const section = placement?.section;
   const item = placement?.item;
+  const showSection = section && section.label !== (item?.label ?? kapittel.tittel);
 
   return (
     <div>
       <Breadcrumb
         items={[
           { label: fag.navn, onClick: () => navigate({ fag: fag.id }) },
-          ...(section
+          ...(showSection
             ? [{ label: section.label, onClick: () => navigate({ fag: fag.id, kapittel: section.id }) }]
             : []),
           { label: item?.label ?? kapittel.tittel },
         ]}
       />
       <header className="page-header">
-        {section && (
+        {showSection && (
           <p className={`cefr-badge tone-${section.tone}`}>
             <span className="tone-swatch" aria-hidden="true" />
             {section.label}
