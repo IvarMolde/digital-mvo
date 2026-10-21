@@ -29,6 +29,8 @@ export type GoalRowField = keyof GoalRow;
  * Kolonnene finnes ut fra overskriftene (ikke plassering), slik at rekkefølgen
  * i regnearket kan endres uten at appen slutter å virke.
  */
+// Matchers are tested with startsWith after normalization (lowercase, spaces collapsed)
+// to handle variations like "Nr.", "Nivå 1 (med støtte)", "Målformulering (kortversjon)" etc.
 export const COLUMN_MATCHERS: Record<GoalRowField, string> = {
   nr: 'nr',
   dokument: 'dokument',

@@ -61,6 +61,29 @@ function PlanView({ plan, category, closeMenu }: { plan: Plan; category: Categor
     closeMenu();
   };
 
+  // Reset route when category changes to avoid stale subject IDs
+  useEffect(() => {
+    const validRouteSubjects = new Set<string>();
+    plan.fag.forEach(f => {
+      if (category === 'norsk-samfunn') {
+        if (['overordnet-del', 'norsk', 'samfunnsfag'].includes(f.id)) {
+          validRouteSubjects.add(f.id);
+        }
+      } else if (category === 'fov') {
+        if (['grunnmodul', 'matematikk', 'naturfag', 'engelsk', 'norsk-spraklige-minoriteter', 'samfunnsfag-fov'].includes(f.id)) {
+          validRouteSubjects.add(f.id);
+        }
+      } else {
+        validRouteSubjects.add(f.id);
+      }
+    });
+
+    // If current route subject is not valid for this category, reset to home
+    if (route.fag && !validRouteSubjects.has(route.fag)) {
+      navigate({ fag: undefined, kapittel: undefined, maal: undefined });
+    }
+  }, [category]);
+
   // Filter subjects based on selected category
   const filteredFag = useMemo(() => {
     if (category === 'norsk-samfunn') {
