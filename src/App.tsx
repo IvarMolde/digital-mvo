@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChapterView } from './components/ChapterView';
 import { GoalView } from './components/GoalView';
+import { LandingPage, type Category } from './components/LandingPage';
 import { Sidebar } from './components/Sidebar';
 import { SubjectOverview } from './components/SubjectOverview';
 import { buildMenu, findPlacement, findSection } from './data/menu';
@@ -11,6 +12,7 @@ import type { Plan } from './types';
 export function App() {
   const state = usePlan();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [category, setCategory] = useState<Category>(null);
 
   return (
     <div className={`app ${menuOpen ? 'menu-open' : ''}`}>
@@ -42,19 +44,43 @@ export function App() {
           <p>{state.message} Kontakt den som har ansvar for planen.</p>
         </div>
       )}
-      {state.status === 'ready' && <PlanView plan={state.plan} closeMenu={() => setMenuOpen(false)} />}
+      {state.status === 'ready' && category === null && (
+        <LandingPage onSelectCategory={setCategory} />
+      )}
+      {state.status === 'ready' && category !== null && (
+        <PlanView plan={state.plan} category={category} closeMenu={() => setMenuOpen(false)} />
+      )}
     </div>
   );
 }
 
-function PlanView({ plan, closeMenu }: { plan: Plan; closeMenu: () => void }) {
+function PlanView({ plan, category, closeMenu }: { plan: Plan; category: Category; closeMenu: () => void }) {
   const [route, navigate] = useHashRoute();
   const go = (next: Route) => {
     navigate(next);
     closeMenu();
   };
 
-  const fag = plan.fag.find((f) => f.id === route.fag) ?? plan.fag[0]!;
+  // Filter subjects based on selected category
+  const filteredFag = useMemo(() => {
+    if (category === 'norsk-samfunn') {
+      return plan.fag.filter((f) =>
+        f.id === 'overordnet-del' || f.id === 'norsk' || f.id === 'samfunnsfag'
+      );
+    } else if (category === 'fov') {
+      return plan.fag.filter((f) =>
+        f.id === 'grunnmodul' ||
+        f.id === 'matematikk' ||
+        f.id === 'naturfag' ||
+        f.id === 'engelsk' ||
+        f.id === 'norsk-spraklige-minoriteter' ||
+        f.id === 'samfunnsfag-fov'
+      );
+    }
+    return plan.fag;
+  }, [plan, category]);
+
+  const fag = filteredFag.find((f) => f.id === route.fag) ?? filteredFag[0]!;
   const menu = useMemo(() => buildMenu(fag), [fag]);
   const kapittel = fag.kapitler.find((k) => k.id === route.kapittel);
   const section = kapittel ? undefined : findSection(menu, route.kapittel ?? '');
@@ -71,7 +97,7 @@ function PlanView({ plan, closeMenu }: { plan: Plan; closeMenu: () => void }) {
   return (
     <div className="layout">
       <Sidebar
-        fag={plan.fag}
+        fag={filteredFag}
         aktivtFag={fag}
         menu={menu}
         aktivtKapittel={kapittel?.id}
