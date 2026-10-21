@@ -1,4 +1,4 @@
-# Digital plan – digitale ferdigheter i voksenopplæringen
+# Digital plan – digitale ferdigheter i voksenopplæringen 
 
 Nettside for lærere som samler alle målformuleringer om digitale ferdigheter fra
 overordnet del, læreplanen i norsk og læreplanen i samfunnsfag for voksne innvandrere.
