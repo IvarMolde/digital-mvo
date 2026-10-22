@@ -24,7 +24,8 @@ const MATERIAL = [
   [/nettside|nettsted/, 'nettsiden'],
   [/mobil/, 'mobilen'],
   [/\bbilder\b|\bbilde\b/, 'bilder'],
-  [/\bkort\b/, 'kort'],
+  // «kort» som adjektiv («en kort tekst») er ikke materiell.
+  [/\bkort(?:ene|et)?\b(?!\s+(?:tekst|melding|e-post|profiltekst|oversikt|klipp|presentasjon|digital|begrunnelse))/, 'kort'],
 ];
 
 const FORBERED = {
@@ -48,7 +49,7 @@ const SE_ETTER = {
 function materials(text) {
   const found = [];
   for (const [pattern, label] of MATERIAL) {
-    if (pattern.test(text) && !found.includes(label)) found.push(label);
+    if (pattern.test(text.toLowerCase()) && !found.includes(label)) found.push(label);
   }
   const specificCard = found.some((label) => label.endsWith('kort') && label !== 'kort');
   const withoutGeneric = found.filter((label) => {

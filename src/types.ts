@@ -27,9 +27,13 @@ export interface Chapter {
   maal: Goal[];
 }
 
+/** Startsiden deler planen i to undervisningsområder. */
+export type AreaId = 'norsk-samfunn' | 'fov';
+
 export interface Subject {
   id: string;
   navn: string;
+  omrade: AreaId;
   kapitler: Chapter[];
 }
 

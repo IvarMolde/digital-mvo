@@ -1,39 +1,81 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AllGoals } from './components/AllGoals';
 import { ChapterView } from './components/ChapterView';
+import { DownloadButton } from './components/DownloadButton';
 import { GoalView } from './components/GoalView';
-import { LandingPage, type Category } from './components/LandingPage';
+import { ChecklistIcon, HomeIcon } from './components/Icons';
+import { LandingPage } from './components/LandingPage';
 import { Sidebar } from './components/Sidebar';
 import { SubjectOverview } from './components/SubjectOverview';
+import { findArea, type Area } from './data/areas';
 import { buildMenu, findPlacement, findSection } from './data/menu';
-import { useHashRoute, type Route } from './hooks/useHashRoute';
+import { buildCatalog } from './data/search';
+import { ALL_GOALS, useHashRoute, type Route } from './hooks/useHashRoute';
+import { useListOptions } from './hooks/useListOptions';
 import { usePlan } from './hooks/usePlan';
+import { downloadFullChecklist } from './services/checklist';
 import type { Plan } from './types';
+
+const SITE_TITLE = 'IKT-plan for Molde voksenopplæringssenter';
 
 export function App() {
   const state = usePlan();
+  const [route, navigate] = useHashRoute();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [category, setCategory] = useState<Category>(null);
+  const area = findArea(route.omrade);
+  const plan = state.status === 'ready' ? state.plan : undefined;
+  const subjects = useMemo(() => (plan && area ? plan.fag.filter((f) => f.omrade === area.id) : []), [plan, area]);
+  const catalog = useMemo(() => buildCatalog(subjects), [subjects]);
+
+  const goHome = () => {
+    setMenuOpen(false);
+    navigate({});
+  };
+
+  // Eldre lenker (#/norsk/kapittel/mål) hadde ikke område. Finn området ut fra faget.
+  useEffect(() => {
+    if (!plan || !route.omrade || area) return;
+    const fag = plan.fag.find((f) => f.id === route.omrade);
+    navigate(fag ? { omrade: fag.omrade, fag: fag.id, kapittel: route.fag, maal: route.kapittel } : {}, { replace: true });
+  }, [plan, route, area, navigate]);
+
+  useEffect(() => {
+    if (!area) document.title = SITE_TITLE;
+  }, [area]);
 
   return (
     <div className={`app ${menuOpen ? 'menu-open' : ''}`}>
       <header className="topbar">
-        <div className="brand">
+        <a className="brand" href="#/" onClick={(event) => (event.preventDefault(), goHome())}>
           <span className="brand-mark" aria-hidden="true" />
-          <div>
-            <strong>Digital plan</strong>
-            <span>Digitale ferdigheter i voksenopplæringen</span>
+          <span className="brand-text">
+            <strong>{SITE_TITLE}</strong>
+            <span>{area ? area.navn : 'Digitale ferdigheter i opplæringen'}</span>
+          </span>
+        </a>
+        {plan && area && (
+          <div className="topbar-actions">
+            <DownloadButton
+              label="Avkryssingsliste"
+              variant="secondary"
+              icon={<ChecklistIcon />}
+              title={`Word-fil med alle mål i ${area.navn.toLowerCase()}`}
+              onDownload={() => downloadFullChecklist(area, catalog)}
+            />
+            <button type="button" className="btn btn-home" onClick={goHome} title="Tilbake til startsiden">
+              <HomeIcon />
+              <span className="btn-label">Hjem</span>
+            </button>
+            <button
+              type="button"
+              className="menu-toggle"
+              aria-expanded={menuOpen}
+              aria-controls="meny"
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              {menuOpen ? 'Lukk meny' : 'Meny'}
+            </button>
           </div>
-        </div>
-        {state.status === 'ready' && (
-          <button
-            type="button"
-            className="menu-toggle"
-            aria-expanded={menuOpen}
-            aria-controls="meny"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            {menuOpen ? 'Lukk meny' : 'Meny'}
-          </button>
         )}
       </header>
 
@@ -44,87 +86,100 @@ export function App() {
           <p>{state.message} Kontakt den som har ansvar for planen.</p>
         </div>
       )}
-      {state.status === 'ready' && category === null && (
-        <LandingPage onSelectCategory={setCategory} />
+      {plan && !area && <LandingPage plan={plan} onSelectArea={(id) => navigate({ omrade: id })} />}
+      {plan && area && subjects.length === 0 && (
+        <div className="status status-error" role="alert">
+          <strong>Det er ingen mål for {area.navn.toLowerCase()} i datafilen ennå.</strong>
+          <p>
+            <button type="button" className="btn btn-secondary" onClick={goHome}>
+              Til startsiden
+            </button>
+          </p>
+        </div>
       )}
-      {state.status === 'ready' && category !== null && (
-        <PlanView plan={state.plan} category={category} closeMenu={() => setMenuOpen(false)} />
+      {plan && area && subjects.length > 0 && (
+        <PlanView
+          key={area.id}
+          plan={plan}
+          area={area}
+          route={route}
+          navigate={navigate}
+          catalog={catalog}
+          closeMenu={() => setMenuOpen(false)}
+        />
       )}
     </div>
   );
 }
 
-function PlanView({ plan, category, closeMenu }: { plan: Plan; category: Category; closeMenu: () => void }) {
-  const [route, navigate] = useHashRoute();
-  const go = (next: Route) => {
-    navigate(next);
-    closeMenu();
-  };
+interface PlanViewProps {
+  plan: Plan;
+  area: Area;
+  route: Route;
+  navigate: (r: Route, options?: { replace?: boolean; keepScroll?: boolean }) => void;
+  catalog: ReturnType<typeof buildCatalog>;
+  closeMenu: () => void;
+}
 
-  // Reset route when category changes to avoid stale subject IDs
-  useEffect(() => {
-    const validRouteSubjects = new Set<string>();
-    plan.fag.forEach(f => {
-      if (category === 'norsk-samfunn') {
-        if (['overordnet-del', 'norsk', 'samfunnsfag'].includes(f.id)) {
-          validRouteSubjects.add(f.id);
-        }
-      } else if (category === 'fov') {
-        if (['grunnmodul', 'matematikk', 'naturfag', 'engelsk', 'norsk-spraklige-minoriteter', 'samfunnsfag-fov'].includes(f.id)) {
-          validRouteSubjects.add(f.id);
-        }
-      } else {
-        validRouteSubjects.add(f.id);
-      }
-    });
+function PlanView({ plan, area, route, navigate, catalog, closeMenu }: PlanViewProps) {
+  const [options, setOptions] = useListOptions();
+  const subjects = useMemo(() => plan.fag.filter((f) => f.omrade === area.id), [plan, area.id]);
 
-    // If current route subject is not valid for this category, reset to home
-    if (route.fag && !validRouteSubjects.has(route.fag)) {
-      navigate({ fag: undefined, kapittel: undefined, maal: undefined });
-    }
-  }, [category]);
+  // Komponentene under kjenner ikke området. Det legges til her.
+  const go = useCallback(
+    (next: Route) => {
+      navigate({ ...next, omrade: area.id });
+      closeMenu();
+    },
+    [navigate, area.id, closeMenu],
+  );
 
-  // Filter subjects based on selected category
-  const filteredFag = useMemo(() => {
-    if (category === 'norsk-samfunn') {
-      return plan.fag.filter((f) =>
-        f.id === 'overordnet-del' || f.id === 'norsk' || f.id === 'samfunnsfag'
-      );
-    } else if (category === 'fov') {
-      return plan.fag.filter((f) =>
-        f.id === 'grunnmodul' ||
-        f.id === 'matematikk' ||
-        f.id === 'naturfag' ||
-        f.id === 'engelsk' ||
-        f.id === 'norsk-spraklige-minoriteter' ||
-        f.id === 'samfunnsfag-fov'
-      );
-    }
-    return plan.fag;
-  }, [plan, category]);
-
-  const fag = filteredFag.find((f) => f.id === route.fag) ?? filteredFag[0]!;
-  const menu = useMemo(() => buildMenu(fag), [fag]);
-  const kapittel = fag.kapitler.find((k) => k.id === route.kapittel);
-  const section = kapittel ? undefined : findSection(menu, route.kapittel ?? '');
-  const placement = kapittel ? findPlacement(menu, kapittel.id) : undefined;
+  const visAlle = route.fag === ALL_GOALS;
+  const fag = visAlle ? undefined : (subjects.find((f) => f.id === route.fag) ?? subjects[0]!);
+  const menu = useMemo(() => (fag ? buildMenu(fag) : undefined), [fag]);
+  const kapittel = fag?.kapitler.find((k) => k.id === route.kapittel);
+  const section = menu && !kapittel ? findSection(menu, route.kapittel ?? '') : undefined;
+  const placement = menu && kapittel ? findPlacement(menu, kapittel.id) : undefined;
   const goal = kapittel?.maal.find((g) => g.nr === route.maal);
   const aktivBolk = placement?.section.id ?? section?.id;
 
   useEffect(() => {
-    document.title = [goal && `Mål ${goal.nr}`, placement?.item.label, placement?.section.label ?? section?.label, fag.navn, 'Digital plan']
+    document.title = [
+      visAlle ? 'Alle mål' : undefined,
+      goal && `Mål ${goal.nr}`,
+      placement?.item.label,
+      placement?.section.label ?? section?.label,
+      fag?.navn,
+      area.kortnavn,
+      'IKT-plan',
+    ]
       .filter(Boolean)
       .join(' – ');
-  }, [fag, kapittel, goal, placement, section]);
+  }, [visAlle, fag, goal, placement, section, area]);
+
+  const showAll = (patch: Partial<typeof options> = {}) => {
+    setOptions(patch);
+    go({ fag: ALL_GOALS });
+  };
+
+  // Søket i menyen fører til listen over alle mål. Menyen blir stående åpen mens læreren skriver.
+  const onSearch = (query: string) => {
+    setOptions({ query });
+    if (!visAlle) navigate({ omrade: area.id, fag: ALL_GOALS }, { keepScroll: true });
+  };
 
   return (
     <div className="layout">
       <Sidebar
-        fag={filteredFag}
+        fag={subjects}
         aktivtFag={fag}
         menu={menu}
         aktivtKapittel={kapittel?.id}
         aktivBolk={aktivBolk}
+        visAlle={visAlle}
+        query={options.query}
+        onSearch={onSearch}
+        onShowAll={() => showAll()}
         navigate={go}
       />
       <main className="content" id="innhold">
@@ -140,12 +195,20 @@ function PlanView({ plan, category, closeMenu }: { plan: Plan; category: Categor
             </ul>
           </details>
         )}
-        {kapittel && goal ? (
+        {visAlle || !fag || !menu ? (
+          <AllGoals area={area} fag={subjects} catalog={catalog} options={options} setOptions={setOptions} navigate={go} />
+        ) : kapittel && goal ? (
           <GoalView fag={fag} kapittel={kapittel} goal={goal} placement={placement} navigate={go} />
         ) : kapittel ? (
           <ChapterView fag={fag} kapittel={kapittel} placement={placement} navigate={go} />
         ) : (
-          <SubjectOverview fag={fag} menu={menu} section={section} navigate={go} />
+          <SubjectOverview
+            fag={fag}
+            menu={menu}
+            section={section}
+            navigate={go}
+            onShowList={() => showAll({ fagId: fag.id, query: '' })}
+          />
         )}
       </main>
     </div>

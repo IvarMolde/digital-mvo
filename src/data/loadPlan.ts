@@ -1,6 +1,7 @@
 import readXlsxFile, { type CellValue, type Sheet } from 'read-excel-file/browser';
 import { COLUMN_MATCHERS, GoalRowSchema, REQUIRED_COLUMNS, type GoalRow, type GoalRowField } from './schema';
 import type { Chapter, Goal, Plan, SkippedRow, Subject } from '../types';
+import { areaForSheet } from './areas';
 
 export const DATA_URL = `${import.meta.env.BASE_URL}data/digitale-ferdigheter.xlsx`;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -22,6 +23,13 @@ export const slugify = (s: string) =>
 function pageNumber(side: string): number {
   const match = side.match(/\d+/);
   return match ? Number(match[0]) : Number.POSITIVE_INFINITY;
+}
+
+/** Uten sidetall på begge gir 0, slik at rekkefølgen fra regnearket beholdes. */
+function comparePages(a: string, b: string): number {
+  const pa = pageNumber(a);
+  const pb = pageNumber(b);
+  return pa === pb ? 0 : pa - pb;
 }
 
 function findColumns(header: readonly (CellValue | null)[]): Partial<Record<GoalRowField, number>> {
@@ -91,6 +99,7 @@ function buildSubject(sheet: Sheet, skipped: SkippedRow[]): Subject | null {
     goals.push(toGoal(parsed.data, subjectId));
   });
 
+  // Map beholder rekkefølgen fra regnearket. Den brukes når sidetall mangler (FOV).
   const byChapter = new Map<string, Goal[]>();
   for (const goal of goals) {
     const list = byChapter.get(goal.kapittel) ?? [];
@@ -101,12 +110,12 @@ function buildSubject(sheet: Sheet, skipped: SkippedRow[]): Subject | null {
   // Kapitlene sorteres etter sidetall, slik at rekkefølgen følger læreplanen.
   const kapitler: Chapter[] = [...byChapter.entries()]
     .map(([tittel, maal]) => {
-      const sorted = [...maal].sort((a, b) => pageNumber(a.side) - pageNumber(b.side) || Number(a.nr) - Number(b.nr));
+      const sorted = [...maal].sort((a, b) => comparePages(a.side, b.side) || Number(a.nr) - Number(b.nr));
       return { id: slugify(tittel), tittel, ...splitChapter(tittel), maal: sorted };
     })
-    .sort((a, b) => pageNumber(a.maal[0]!.side) - pageNumber(b.maal[0]!.side));
+    .sort((a, b) => comparePages(a.maal[0]!.side, b.maal[0]!.side));
 
-  return { id: subjectId, navn: sheet.sheet, kapitler };
+  return { id: subjectId, ...areaForSheet(sheet.sheet), kapitler };
 }
 
 export async function loadPlan(signal?: AbortSignal): Promise<Plan> {

@@ -4,12 +4,14 @@ import type { Route } from '../hooks/useHashRoute';
 import { LEVEL_LABELS, type LevelNumber, type Subject } from '../types';
 import { CurriculumMenu } from './CurriculumMenu';
 import { DownloadButton } from './DownloadButton';
+import { ListIcon } from './Icons';
 
 interface Props {
   fag: Subject;
   menu: SubjectMenu;
   section?: MenuSection;
   navigate: (r: Route) => void;
+  onShowList: () => void;
 }
 
 const LEVEL_TEXT: Record<LevelNumber, string> = {
@@ -18,7 +20,7 @@ const LEVEL_TEXT: Record<LevelNumber, string> = {
   3: 'Deltakeren gjør oppgaven på egen hånd og overfører den til nye situasjoner.',
 };
 
-export function SubjectOverview({ fag, menu, section, navigate }: Props) {
+export function SubjectOverview({ fag, menu, section, navigate, onShowList }: Props) {
   const antall = section ? countGoals(section) : fag.kapitler.reduce((n, k) => n + k.maal.length, 0);
   const onDownload = useCallback(async () => (await import('../services/docxExport')).exportSubject(fag), [fag]);
   const shown: SubjectMenu = section
@@ -40,7 +42,13 @@ export function SubjectOverview({ fag, menu, section, navigate }: Props) {
           </p>
         </div>
         {!section && (
-          <DownloadButton label={`Last ned ${fag.navn.toLowerCase()} (Word)`} onDownload={onDownload} variant="secondary" />
+          <div className="header-actions">
+            <button type="button" className="btn btn-secondary" onClick={onShowList}>
+              <ListIcon />
+              Vis alle mål som liste
+            </button>
+            <DownloadButton label={`Last ned ${fag.navn.toLowerCase()} (Word)`} onDownload={onDownload} variant="secondary" />
+          </div>
         )}
       </header>
 

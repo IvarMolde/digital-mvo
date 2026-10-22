@@ -1,6 +1,7 @@
 import {
   AlignmentType,
   BorderStyle,
+  CheckBox,
   Document,
   HeadingLevel,
   Packer,
@@ -9,6 +10,7 @@ import {
   ShadingType,
   Table,
   TableCell,
+  TableLayoutType,
   TableRow,
   TextRun,
   WidthType,
@@ -71,7 +73,7 @@ function goalBlock(goal: Goal, subjectName: string): FileChild[] {
 
 function buildDocument(title: string, subtitle: string, children: FileChild[]): Document {
   return new Document({
-    creator: 'Digital plan – Voksenopplæringen',
+    creator: 'IKT-plan – Molde voksenopplæringssenter',
     title,
     styles: { default: { document: { run: { font: 'Calibri' } } } },
     sections: [
@@ -93,7 +95,7 @@ function buildDocument(title: string, subtitle: string, children: FileChild[]): 
 }
 
 const safeFileName = (s: string) =>
-  s.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'digital-plan';
+  s.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'ikt-plan';
 
 async function download(doc: Document, fileName: string): Promise<void> {
   const blob = await Packer.toBlob(doc);
@@ -120,4 +122,95 @@ export async function exportSubject(subject: Subject): Promise<void> {
   const antall = subject.kapitler.reduce((n, k) => n + k.maal.length, 0);
   const doc = buildDocument(`Digitale ferdigheter – ${subject.navn}`, `${antall} mål fordelt på ${subject.kapitler.length} kapitler`, children);
   await download(doc, `${subject.navn} – digitale ferdigheter`);
+}
+
+export interface ChecklistGroup {
+  tittel: string;
+  maal: { nr: string; maal: string; sted: string }[];
+}
+
+// A4 stående: 11906 twips bredt minus marger. Summen av kolonnene er 10106.
+const CHECKLIST_COLUMNS = [620, 5036, 800, 800, 800, 2050];
+const HEADER_FILL = 'E8EFF7';
+
+function checklistCell(children: Paragraph[], width: number, fill?: string): TableCell {
+  return new TableCell({
+    width: { size: width, type: WidthType.DXA },
+    borders: CELL_BORDERS,
+    margins: { top: 60, bottom: 60, left: 100, right: 100 },
+    shading: fill ? { type: ShadingType.CLEAR, fill, color: 'auto' } : undefined,
+    children,
+  });
+}
+
+const centered = (children: (TextRun | CheckBox)[]) => new Paragraph({ alignment: AlignmentType.CENTER, children });
+
+function checklistTable(group: ChecklistGroup): Table {
+  const header = new TableRow({
+    tableHeader: true,
+    cantSplit: true,
+    children: ['Nr.', 'Målformulering', 'Nivå 1', 'Nivå 2', 'Nivå 3', 'Dato / merknad'].map((label, i) =>
+      checklistCell(
+        [i >= 2 && i <= 4 ? centered([new TextRun({ text: label, bold: true, size: 18 })]) : text(label, { bold: true, size: 18 })],
+        CHECKLIST_COLUMNS[i]!,
+        HEADER_FILL,
+      ),
+    ),
+  });
+  const rows = group.maal.map(
+    (m) =>
+      new TableRow({
+        cantSplit: true,
+        children: [
+          checklistCell([text(m.nr, { size: 18, color: '5B6470' })], CHECKLIST_COLUMNS[0]!),
+          checklistCell(
+            [
+              new Paragraph({ spacing: { after: 40 }, children: [new TextRun({ text: m.maal, size: 20 })] }),
+              new Paragraph({ children: [new TextRun({ text: m.sted, size: 16, color: '5B6470' })] }),
+            ],
+            CHECKLIST_COLUMNS[1]!,
+          ),
+          ...[2, 3, 4].map((i) => checklistCell([centered([new CheckBox({ checked: false })])], CHECKLIST_COLUMNS[i]!)),
+          checklistCell([new Paragraph({ children: [] })], CHECKLIST_COLUMNS[5]!),
+        ],
+      }),
+  );
+  return new Table({
+    width: { size: CHECKLIST_COLUMNS.reduce((a, b) => a + b, 0), type: WidthType.DXA },
+    columnWidths: CHECKLIST_COLUMNS,
+    layout: TableLayoutType.FIXED,
+    rows: [header, ...rows],
+  });
+}
+
+/** Avkryssingsliste: alle målene som vises, med en avkrysningsboks per nivå. */
+export async function exportChecklist(tittel: string, undertittel: string, groups: ChecklistGroup[]): Promise<void> {
+  const antall = groups.reduce((n, g) => n + g.maal.length, 0);
+  const dato = new Date().toLocaleDateString('nb-NO');
+  const doc = new Document({
+    creator: 'IKT-plan – Molde voksenopplæringssenter',
+    title: tittel,
+    styles: { default: { document: { run: { font: 'Calibri' } } } },
+    sections: [
+      {
+        properties: { page: { margin: { top: 900, bottom: 900, left: 900, right: 900 } } },
+        children: [
+          new Paragraph({ heading: HeadingLevel.HEADING_1, text: tittel }),
+          text(`${undertittel} · ${antall} mål · laget ${dato}`, { size: 20, color: '5B6470' }),
+          new Paragraph({
+            spacing: { before: 200, after: 120 },
+            children: [new TextRun({ text: 'Lærer: ______________________    Gruppe: ______________    Skoleår: __________', size: 20 })],
+          }),
+          text('Kryss av for nivået deltakerne har jobbet på, og skriv dato eller en kort merknad.', { size: 18, italics: true, color: '5B6470' }),
+          ...groups.flatMap((group) => [
+            ...(group.tittel
+              ? [new Paragraph({ heading: HeadingLevel.HEADING_2, keepNext: true, spacing: { before: 320, after: 120 }, text: group.tittel })]
+              : [new Paragraph({ spacing: { after: 120 }, children: [] })]),
+            checklistTable(group),
+          ]),
+        ],
+      },
+    ],
+  });
+  await download(doc, tittel);
 }

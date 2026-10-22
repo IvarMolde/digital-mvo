@@ -1,4 +1,4 @@
-import type { Chapter, Goal, Subject } from '../types';
+import type { Chapter, Subject } from '../types';
 
 /** Menyfarge. Varm skala er språknivå. Nøytral er dokumentets egen inndeling. */
 export type MenuTone = 'neutral' | 'fora1' | 'a1' | 'a2' | 'b1' | 'b2';
@@ -22,17 +22,11 @@ export interface SubjectMenu {
   sections: MenuSection[];
   /** Norsk bruker språknivå som navigasjon, og skal forklare de to fargesystemene. */
   viserSpraanivaa: boolean;
-  /** Samfunnsfag: temaet er menyvalget. Kapittelnummeret er bare en henvisning. */
+  /** Samfunnsfag og FOV: temaet eller modulen er menyvalget. Kapittelnummeret er bare en henvisning. */
   direkteTema: boolean;
 }
 
 export interface Placement {
-  section: MenuSection;
-  item: MenuItem;
-}
-
-export interface SearchHit {
-  goal: Goal;
   section: MenuSection;
   item: MenuItem;
 }
@@ -52,6 +46,8 @@ interface Draft {
 }
 
 function subjectKind(subject: Subject): 'norsk' | 'overordnet' | 'samfunn' | 'other' {
+  // FOV-fagene er delt i moduler, og hver modul er et eget menyvalg.
+  if (subject.omrade === 'fov') return 'samfunn';
   const name = subject.navn.toLowerCase();
   if (name.startsWith('norsk')) return 'norsk';
   if (name.startsWith('overordnet')) return 'overordnet';
@@ -209,23 +205,4 @@ export function findSection(menu: SubjectMenu, sectionId: string): MenuSection |
 
 export function countGoals(section: MenuSection): number {
   return section.items.reduce((sum, item) => sum + item.chapter.maal.length, 0);
-}
-
-/** Søker i målformulering, kapittel, sidetall og menynavn i det aktive dokumentet. */
-export function searchGoals(menu: SubjectMenu, query: string): SearchHit[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return [];
-  const hits: SearchHit[] = [];
-  for (const section of menu.sections) {
-    for (const item of section.items) {
-      for (const goal of item.chapter.maal) {
-        const haystack = [goal.maal, goal.kapittel, goal.side, goal.nr, item.label, section.label, item.henvisning]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        if (haystack.includes(needle)) hits.push({ goal, section, item });
-      }
-    }
-  }
-  return hits;
 }
